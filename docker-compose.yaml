@@ -1,0 +1,59 @@
+services:
+  webui-db:
+    image: postgres
+    environment:
+      - POSTGRES_DB=storage
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+    ports:
+      - "5431:5431"
+    command: -p 5431
+    volumes:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U user -d storage -p 5431" ]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:0.3.10
+    container_name: open-webui
+    depends_on:
+      - webui-db
+#      - bedrock-gateway
+    ports:
+      - 3002:8080
+    environment:
+#      - 'OLLAMA_BASE_URL=http://host.docker.internal:11434'
+      - 'WEBUI_SECRET_KEY='
+      - 'WEBUI_DB_HOST=webui-db'
+      - 'DATABASE_URL=postgresql://user:pass@webui-db:5431/storage'
+      # OpenAI API Configuration for Bedrock Gateway
+      - 'OPENAI_API_BASE_URL=http://bedrock-gateway:80/api/v1'
+      - 'OPENAI_API_KEY=bedrock'
+      # Alternative environment variables (if the above don't work)
+      - 'OPENAI_BASE_URL=http://bedrock-gateway:80/api/v1'
+      - 'OPENAI_API_BASE=http://bedrock-gateway:80/api/v1'
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    restart: unless-stopped
+
+  bedrock-gateway:
+    build: ./bedrock-gateway
+    environment:
+#      - API_KEY_PARAM_NAME=123456
+      - DEBUG=true
+      - PORT=80
+    env_file:
+      - path: ./.env
+        required: true
+    ports:
+      - "8080:80"
+    container_name: bedrock-gateway
+    restart: unless-stopped
+
+volumes:
+  ollama: { }
+  open-webui: { }
